@@ -46,9 +46,18 @@ alter publication supabase_realtime add table posts;
 
 -- RLS Policies (Row Level Security)
 -- For now, allow all access (we'll restrict later when we add auth)
-CREATE POLICY "Allow all" ON posts FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all" ON media FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all" ON posting_logs FOR ALL USING (true) WITH CHECK (true);
+-- Enable Row Level Security for tables and add permissive policies (allows access while RLS is enabled)
+ALTER TABLE IF EXISTS posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all" ON posts FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS media ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all" ON media FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS posting_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all" ON posting_logs FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE IF EXISTS linkedin_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Allow all" ON linkedin_tokens FOR ALL USING (true) WITH CHECK (true);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -62,3 +71,12 @@ $$ language 'plpgsql';
 -- Trigger to auto-update updated_at
 CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON posts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Table to store LinkedIn access tokens (per-user)
+CREATE TABLE IF NOT EXISTS linkedin_tokens (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  access_token TEXT NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

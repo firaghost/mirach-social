@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getPublicSupabase } from '@/lib/supabase'
 
 interface Post {
   id: string
@@ -36,6 +36,13 @@ export default function PostsList() {
   }, [activeTab])
 
   const fetchPosts = async () => {
+    const supabase = getPublicSupabase()
+    if (!supabase) {
+      console.warn('Public Supabase client not configured (NEXT_PUBLIC_SUPABASE_... missing)')
+      setPosts([])
+      return
+    }
+
     const { data, error } = await supabase
       .from('posts')
       .select(`
@@ -44,18 +51,19 @@ export default function PostsList() {
       `)
       .eq('status', activeTab)
       .order('created_at', { ascending: false })
-    
+
     if (error) {
       console.error('Error fetching posts:', error)
       return
     }
-    
+
     setPosts(data || [])
   }
 
   const checkLinkedInConnection = async () => {
     try {
-      const res = await fetch('/api/auth/linkedin/status')
+      const userId = process.env.NEXT_PUBLIC_DEFAULT_USER_ID
+      const res = await fetch(`/api/auth/linkedin/status${userId ? `?user_id=${userId}` : ''}`)
       if (!res.ok) {
         setLinkedInConnected(false)
         return
@@ -124,6 +132,13 @@ export default function PostsList() {
     setLoading(true)
     
     // First create the post
+    const supabase = getPublicSupabase()
+    if (!supabase) {
+      alert('Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      setLoading(false)
+      return
+    }
+
     const { data: post, error } = await supabase
       .from('posts')
       .insert([{
@@ -153,6 +168,12 @@ export default function PostsList() {
   }
 
   const approvePost = async (id: string) => {
+    const supabase = getPublicSupabase()
+    if (!supabase) {
+      alert('Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      return
+    }
+
     const { error } = await supabase
       .from('posts')
       .update({ status: 'approved' })
@@ -209,7 +230,8 @@ export default function PostsList() {
   }
 
   const connectLinkedIn = () => {
-    window.location.href = '/api/auth/linkedin'
+    const userId = process.env.NEXT_PUBLIC_DEFAULT_USER_ID
+    window.location.href = `/api/auth/linkedin${userId ? `?user_id=${userId}` : ''}`
   }
 
   const getStatusColor = (status: string) => {

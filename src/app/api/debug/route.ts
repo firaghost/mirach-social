@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Debug endpoints are disabled in production. This route returns 404.
 export async function GET(request: NextRequest) {
-  return NextResponse.json({ ok: true, now: new Date().toISOString(), route: 'debug', method: 'GET' })
+  return NextResponse.json({ error: 'Debug endpoint disabled' }, { status: 404 })
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.text()
-  return NextResponse.json({ ok: true, now: new Date().toISOString(), route: 'debug', method: 'POST', body })
+  return NextResponse.json({ error: 'Debug endpoint disabled' }, { status: 404 })
 }

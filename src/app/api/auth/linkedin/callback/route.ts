@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseAdmin } from '@/lib/supabase'
 
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET
@@ -64,23 +65,45 @@ export async function GET(request: NextRequest) {
     console.log('LinkedIn Access Token:', tokenData.access_token)
     console.log('Expires in:', tokenData.expires_in, 'seconds')
     
-    // Redirect to settings page with token info
-    const response = NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/settings?linkedin_connected=true`
-    )
-    
-    // Clear the state cookie
-    response.cookies.delete('linkedin_oauth_state')
-    
-    // Store token in httpOnly cookie (temporary for demo)
-    // In production, store in database
-    response.cookies.set('linkedin_token', tokenData.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: tokenData.expires_in
-    })
-    
-    return response
+    // Store token in database (server-side) for improved security
+    try {
+      const supabaseAdmin = createSupabaseAdmin()
+
+      const expiresAt = new Date(Date.now() + (tokenData.expires_in * 1000)).toISOString()
+
+      // Optional user_id passed through the initial auth request
+      const userId = new URL(request.url).searchParams.get('user_id') || null
+
+      // Insert new token record (attach user_id if provided)
+      const insertPayload: any = {
+        access_token: tokenData.access_token,
+        expires_at: expiresAt
+      }
+      if (userId) insertPayload.user_id = userId
+
+      const { error: insertError } = await supabaseAdmin
+        .from('linkedin_tokens')
+        .insert([insertPayload])
+
+      if (insertError) {
+        console.error('Failed to store LinkedIn token in DB:', insertError)
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_APP_URL}/?error=token_store_failed`
+        )
+      }
+
+      // Clear the state cookie and redirect to settings
+      const response = NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/settings?linkedin_connected=true`
+      )
+      response.cookies.delete('linkedin_oauth_state')
+      return response
+    } catch (err) {
+      console.error('Error storing LinkedIn token:', err)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/?error=token_store_exception`
+      )
+    }
     
   } catch (error) {
     console.error('OAuth callback error:', error)

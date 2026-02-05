@@ -18,8 +18,30 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Read LinkedIn access token from httpOnly cookie set at OAuth callback
-    const token = request.cookies.get('linkedin_token')?.value || process.env.LINKEDIN_ACCESS_TOKEN
+    const supabaseAdmin = createSupabaseAdmin()
+
+    // Optional per-user token selection
+    const userId = request.nextUrl.searchParams.get('user_id') || request.headers.get('x-user-id') || null
+
+    // Read latest LinkedIn token from DB (server-side)
+    let token: string | undefined = process.env.LINKEDIN_ACCESS_TOKEN
+    try {
+      let query = supabaseAdmin.from('linkedin_tokens').select('*').order('created_at', { ascending: false }).limit(1)
+      if (userId) query = query.eq('user_id', userId)
+
+      const { data: tokens, error: tokenError } = await query
+
+      if (tokenError) {
+        console.error('Error querying linkedin_tokens:', tokenError)
+      } else if (tokens && tokens.length > 0) {
+        const row = tokens[0]
+        if (row.access_token && (!row.expires_at || new Date(row.expires_at) > new Date())) {
+          token = row.access_token
+        }
+      }
+    } catch (err) {
+      console.error('Exception reading linkedin_tokens:', err)
+    }
 
     if (!token) {
       return NextResponse.json(
@@ -27,8 +49,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    const supabaseAdmin = createSupabaseAdmin()
 
     // Get post from database with media
     const { data: post, error: fetchError } = await supabaseAdmin
